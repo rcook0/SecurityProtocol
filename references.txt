@@ -1,0 +1,10 @@
+Dierks, T. & Rescorla, E. (2018). The Transport Layer Security (TLS) Protocol Version 1.3. RFC 8446. IETF.
+NIST (2020). Zero Trust Architecture. NIST SP 800-207.
+Microsoft (2025). WebAssembly Security Guidance. Redmond: Microsoft.
+European Union (2016). General Data Protection Regulation (GDPR). EU 2016/679.
+US Congress (1996). Health Insurance Portability and Accountability Act (HIPAA). Public Law 104-191.
+ENISA (2023). Post-Quantum Cryptography Transition Guidance. European Union Agency for Cybersecurity.
+MITRE (2024). ATT&CK Framework: Techniques and Mitigations. MITRE Corporation.
+European Banking Authority (2021). PSD2 Guidelines on Strong Customer Authentication.
+Basel Committee on Banking Supervision (2022). Basel III/IV Standards. BIS.
+European Commission (2023). Markets in Crypto-Assets Regulation (MiCA).

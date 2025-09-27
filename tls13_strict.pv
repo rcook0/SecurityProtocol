@@ -1,0 +1,68 @@
+(* tls13_strict.pv
+   Tightened ProVerif model of TLS 1.3 (server-auth only)
+   - Ephemeral DH, transcript binding, staged KDF, handshake/app keys
+   - Queries: secrecy of SecretMsg, client-server correspondence
+*)
+(* ---------- Types & algebra ---------- *)
+type skey. type gexp. type key. type bytes. type nonce. type ver. type suite. type ident.
+fun pk(skey): bytes.
+fun sign(bytes, skey): bytes.
+reduc verify(sign(m,sk), pk(sk)) = m.
+fun g(): gexp. fun exp(gexp, skey): gexp. fun dh(gexp, skey): key.
+equation dh(exp(g(),x), y) = dh(exp(g(),y), x).
+fun H(bytes): bytes. fun KDF(key, bytes): key.
+fun senc(bytes, key): bytes. reduc sdec(senc(m,k), k) = m.
+fun pair(bytes, bytes): bytes. fun triple(bytes, bytes, bytes): bytes. fun quad(bytes, bytes, bytes, bytes): bytes.
+free net: channel.
+free v13: ver. free cs_AEAD: suite. free Cid, Sid: ident.
+free skS: skey [private]. let pkS = pk(skS).
+free SecretMsg: bytes.
+event ClientBegin(bytes). event ClientEnd(bytes). event ServerBegin(bytes). event ServerEnd(bytes).
+let client =
+  new x: skey; new nc: nonce;
+  let gx = exp(g(), x) in
+  out(net, ( "ClientHello", gx, nc, Cid, Sid, v13, cs_AEAD ));
+  in(net, ( "ServerHello", ?gy: gexp, ?ns: nonce, ?cert: bytes, ?sig: bytes, ?vsel: ver, ?cssel: suite ));
+  if cert = pkS then
+    let T = quad( quad(vsel, cssel, Cid, Sid), quad(gx, gy, nc, ns), 0, 0) in
+    let transcript1 = H(pair(gx, nc)) in
+    let transcript2 = H(pair(transcript1, pair(gy, ns))) in
+    let signed = verify(sig, cert) in
+    if signed = T then
+      let pre = dh(gy, x) in
+      let k_hs = KDF(pre, transcript2) in
+      let k_app = KDF(k_hs, transcript2) in
+      event ClientBegin(transcript2);
+      out(net, ("FinishedC", senc(transcript2, k_hs)));
+      in(net, ("FinishedS", ?fins: bytes));
+      let dec = sdec(fins, k_hs) in
+      if dec = transcript2 then
+        event ClientEnd(transcript2);
+        out(net, ("AppData", senc(SecretMsg, k_app)))
+      else 0
+    else 0
+  else 0.
+let server =
+  ! ( in(net, ("ClientHello", ?gx: gexp, ?nc: nonce, ?cid: ident, ?sid: ident, ?v: ver, ?cs: suite));
+      new y: skey; new ns: nonce;
+      let gy = exp(g(), y) in
+      let T = quad( quad(v, cs, cid, sid), quad(gx, gy, nc, ns), 0, 0) in
+      let transcript1 = H(pair(gx, nc)) in
+      let transcript2 = H(pair(transcript1, pair(gy, ns))) in
+      let sigS = sign(T, skS) in
+      out(net, ("ServerHello", gy, ns, pkS, sigS, v, cs));
+      let pre = dh(gx, y) in
+      let k_hs = KDF(pre, transcript2) in
+      let k_app = KDF(k_hs, transcript2) in
+      event ServerBegin(transcript2);
+      in(net, ("FinishedC", ?finc: bytes));
+      let decC = sdec(finc, k_hs) in
+      if decC = transcript2 then
+        out(net, ("FinishedS", senc(transcript2, k_hs)));
+        event ServerEnd(transcript2)
+      else 0
+  ).
+process ( server | client )
+query attacker(SecretMsg).
+query ev:ClientEnd(x) ==> ev:ServerEnd(x).
+query ev:ServerEnd(x) ==> ev:ClientEnd(x).

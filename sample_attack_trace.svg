@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="600" viewBox="0 0 1200 600">
+  <rect width="100%" height="100%" fill="white"/>
+  <text x="20" y="34" font-family="DejaVu Sans, monospace" font-size="18" fill="black">Sample Attack Trace — ProVerif (mock)</text>
+  <rect x="16" y="56" width="1168" height="528" fill="none" stroke="black" stroke-width="1"/>
+  <g font-family="DejaVu Sans, monospace" font-size="14" fill="black">
+    <text x="36" y="86">1) Attacker intercepts ClientHello(gx, nc)</text>
+    <text x="36" y="110">2) Attacker forges ServerHello(gy', ns', pk_fake, sig_fake)</text>
+    <text x="36" y="134">3) Client verifies signature -&gt; FAILS (mismatch) OR accepts if sig forged</text>
+    <text x="36" y="158">4) Attacker relays Finished messages to splice sessions</text>
+    <text x="36" y="182">5) Attacker obtains encrypted AppData and attempts KDF/AEAD oracle</text>
+    <text x="36" y="212"> </text>
+    <text x="36" y="236">Trace details (example):</text>
+    <text x="56" y="260">CLIENT -&gt; NET : ClientHello(gx=G^x1, nc=0xA3)</text>
+    <text x="56" y="284">NET    -&gt; SERVER: ClientHello(gx=G^x1, nc=0xA3)</text>
+    <text x="56" y="308">ATTACKER -&gt; CLIENT: ServerHello(gy=G^y2, ns=0xF2, pk=fake, sig=fake_sig)</text>
+    <text x="56" y="332">CLIENT -&gt; NET : FinishedC = AEAD(H(T), k_hs')</text>
+    <text x="56" y="356">ATTACKER -&gt; SERVER: FinishedC (replay)</text>
+    <text x="56" y="380">SERVER -&gt; NET : FinishedS = AEAD(H(T'), k_hs)</text>
+    <text x="56" y="404">ATTACKER -&gt; CLIENT: FinishedS (relay)</text>
+    <text x="36" y="434"> </text>
+    <text x="36" y="458">Result: If signature did not cover both gx and gy then MITM/splice possible.</text>
+    <text x="36" y="482"> </text>
+    <text x="36" y="506">Recommendation: ensure signatures cover (gx, gy, nc, ns, ids) and bind version/cs.</text>
+  </g>
+</svg>

@@ -1,0 +1,89 @@
+theory TLS13_Strict
+
+begin
+  builtins: hashing, symmetric-encryption, diffie-hellman
+  functions
+    pk/1: pubkey
+    sign/2: bytes
+    verify/2: bytes
+    sid/8:  bytes
+    kdf/2:  skey
+    appk/2: skey
+  equations
+    verify(sign(m,sk), pk(sk)) = m
+  free V13 : bytes. free CS  : bytes. free Cid : bytes. free Sid : bytes.
+  facts:
+    LtkS/1, UsesLtk/2, StC/1, StS/1, Nc/1, Ns/1, Pending/4, HsKey/4, AppKey/4, Transcript/2
+  events:
+    ClientBegin/2, ClientEnd/2, ServerBegin/2, ServerEnd/2
+  rule ServerKeyGen:
+    [ Fr(sk) ] --> [ LtkS(sk), Out(pk(sk)) ]
+  rule ClientHello:
+    [ Fr(x), Fr(nc) ]
+    -->
+    [ StC(x), Nc(nc),
+      Out(<"CH", exp(g,x), nc, Cid, Sid, V13, CS>),
+      ClientBegin(Cid, Sid)
+    ]
+  rule ServerHello:
+    [ In(<"CH", gx, nc, C, S, v, cs>), Fr(y), Fr(ns), LtkS(sk) ]
+    -->
+    [ StS(y), Ns(ns),
+      Out(<"SH", exp(g,y), ns, pk(sk), sign(sid(v,cs,C,S,gx,exp(g,y),nc,ns), sk), v, cs>),
+      UsesLtk(sk, sid(v,cs,C,S,gx,exp(g,y),nc,ns)),
+      ServerBegin(S, C)
+    ]
+  rule ClientFinished:
+    [ In(<"SH", gy, ns, pkS, sigS, v, cs>), StC(x), Nc(nc) ]
+    -->
+    [ let sidv  = sid(v,cs,Cid,Sid,exp(g,x),gy,nc,ns) in
+      let pre   = exp(gy,x) in
+      let khs   = kdf(pre, sidv) in
+      HsKey(Cid,Sid,khs,sidv),
+      Pending(Cid,Sid,khs,sidv),
+      Out(<"FinishedC", senc(sidv, khs)>)
+    ]
+    where
+      verify(sigS, pkS) = sid(v,cs,Cid,Sid,exp(g,x),gy,nc,ns)
+  rule ServerFinished:
+    [ In(<"FinishedC", finC>),
+      StS(y), Ns(ns),
+      In(<"CH", gx, nc, C, S, v, cs>),
+      LtkS(sk) ]
+    -->
+    [ let sidv = sid(v,cs,C,S,gx,exp(g,y),nc,ns) in
+      let pre  = exp(gx,y) in
+      let khs  = kdf(pre, sidv) in
+      sdec(finC, khs) = sidv,
+      Out(<"FinishedS", senc(sidv, khs)>),
+      HsKey(S,C,khs,sidv),
+      ServerEnd(S,C)
+    ]
+  rule ClientConfirm:
+    [ In(<"FinishedS", finS>), Pending(C,S,khs,sidv) ]
+    -->
+    [ sdec(finS, khs) = sidv,
+      AppKey(C,S, appk(khs,sidv), sidv),
+      ClientEnd(C,S)
+    ]
+  rule LeakServerLTK:
+    [ LtkS(sk) ] --[ LtkRev(sk) ]-> [ Out(sk) ]
+  lemma secrecy_appkey:
+    "All C S k sid #i. AppKey(C,S,k,sid)@i ==> not (K(k))"
+  lemma corr_client_to_server:
+    "All C S #i. ClientEnd(C,S)@i ==> (Ex #j. ServerEnd(S,C)@j)"
+  lemma corr_server_to_client:
+    "All C S #j. ServerEnd(S,C)@j ==> (Ex #i. ClientEnd(C,S)@i)"
+  lemma injective_agreement:
+    "All C S #i #i' #j #j'.
+       (ClientEnd(C,S)@i & ServerEnd(S,C)@j &
+        ClientEnd(C,S)@i' & ServerEnd(S,C)@j')
+       ==> (i = i' & j = j')"
+  lemma forward_secrecy:
+    "All C S k sid sk #i #j #u.
+       (AppKey(C,S,k,sid)@i
+        & UsesLtk(sk,sid)@u
+        & LtkRev(sk)@j
+        & i < j)
+       ==> not (K(k))"
+end
